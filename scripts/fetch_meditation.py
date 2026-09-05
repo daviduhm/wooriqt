@@ -6,27 +6,31 @@
 사용법:
     python3 fetch_meditation.py [YYYY-MM-DD]
 
-주의:
-    이 환경의 네트워크 정책상 www.woorichurch.org 는 차단되어 있고
-    www 없는 woorichurch.org 만 허용되어 있다. 반드시 naked domain을 쓸 것.
+정식 주소는 www.woorichurch.org (예: www.woorichurch.org/modu/ov/ov_meditation.asp?ov_date=YYYY-MM-DD)
+이며 기본으로 이걸 사용한다. 과거 이 환경의 네트워크 정책이 www 서브도메인을
+차단하고 naked domain(woorichurch.org)만 허용했던 적이 있었는데(2026-09-04),
+이후 정책이 바뀌어 www도 정상 접속됨을 확인했다(2026-09-05). 혹시 네트워크
+정책이 다시 바뀌어 www 접속이 막히는 경우를 대비해, www 요청이 실패하면
+자동으로 naked domain으로 한 번 더 시도한다(BASE_URL_FALLBACKS 참고).
 """
 import html
 import json
 import re
 import sys
+import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
 KST = timezone(timedelta(hours=9))
-BASE_URL = "https://woorichurch.org/modu/ov/ov_meditation.asp"
+BASE_URL = "https://www.woorichurch.org/modu/ov/ov_meditation.asp"
+BASE_URL_FALLBACKS = ["https://woorichurch.org/modu/ov/ov_meditation.asp"]
 
 
 def today_kst() -> str:
     return datetime.now(KST).strftime("%Y-%m-%d")
 
 
-def fetch_html(date_str: str) -> str:
-    url = f"{BASE_URL}?lef=3&ov_date={date_str}"
+def _fetch_once(url: str) -> str:
     req = urllib.request.Request(
         url,
         headers={
@@ -44,6 +48,19 @@ def fetch_html(date_str: str) -> str:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
         return raw.decode("cp949", errors="replace")
+
+
+def fetch_html(date_str: str) -> str:
+    urls = [BASE_URL] + BASE_URL_FALLBACKS
+    last_err = None
+    for i, base in enumerate(urls):
+        try:
+            return _fetch_once(f"{base}?lef=3&ov_date={date_str}")
+        except (urllib.error.URLError, OSError) as e:
+            last_err = e
+            if i < len(urls) - 1:
+                continue
+    raise last_err
 
 
 def clean_block(text: str) -> str:
@@ -109,7 +126,7 @@ def parse(page: str, date_str: str) -> dict:
         "meditation": extract_section(page, "한 구절 묵상"),
         "questions": extract_section(page, "묵상질문"),
         "prayer": extract_section(page, "심정이 통하는 기도"),
-        "source_url": f"{BASE_URL}?ov_date={date_str}",
+        "source_url": f"https://www.woorichurch.org/modu/ov/ov_meditation.asp?ov_date={date_str}",
     }
     return data
 

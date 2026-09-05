@@ -2,11 +2,14 @@
 
 분당우리교회 '한 구절 묵상' 페이지를 매일 스크래핑해서 이메일로 보내주는 자동화.
 
-- 대상 페이지: https://woorichurch.org/modu/ov/ov_meditation.asp?lef=3
-  - ⚠️ 이 저장소가 실행되는 환경(claude.ai/code 원격 세션)의 네트워크 허용 목록에는
-    `woorichurch.org` (www 없는 naked domain)만 등록되어 있다. `www.woorichurch.org`는
-    프록시에서 403으로 차단되므로 **반드시 www 없이 접속**해야 한다.
-  - 특정 날짜 콘텐츠는 `?lef=3&ov_date=YYYY-MM-DD` 쿼리로 조회할 수 있다.
+- 대상 페이지(정식 주소): https://www.woorichurch.org/modu/ov/ov_meditation.asp?lef=3
+  - 특정 날짜 콘텐츠는 `?ov_date=YYYY-MM-DD` 쿼리로 조회할 수 있다
+    (예: `https://www.woorichurch.org/modu/ov/ov_meditation.asp?ov_date=2026-09-05`).
+  - 2026-09-04에는 이 저장소가 실행되는 환경(claude.ai/code 원격 세션)의 네트워크
+    정책이 `www.woorichurch.org`를 403으로 차단하고 naked domain(`woorichurch.org`)만
+    허용한 적이 있었다. 2026-09-05에 정책이 바뀌어 www도 정상 접속됨을 확인했다.
+    `scripts/fetch_meditation.py`는 www로 먼저 시도하고, 혹시 다시 막히면 자동으로
+    naked domain으로 폴백한다.
 - 수신자: geehoon.uhm@gmail.com
 - 실행 방식: Claude Code Remote Routine(트리거)이 매일 새 세션을 만들어 실행.
 
