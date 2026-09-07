@@ -10,7 +10,7 @@
     허용한 적이 있었다. 2026-09-05에 정책이 바뀌어 www도 정상 접속됨을 확인했다.
     `scripts/fetch_meditation.py`는 www로 먼저 시도하고, 혹시 다시 막히면 자동으로
     naked domain으로 폴백한다.
-- 수신자: geehoon.uhm@gmail.com
+- 수신자: 저장소 소유자의 개인 이메일 (Routine 설정에 저장되어 있으며, 이 저장소에는 노출하지 않음)
 - 실행 방식: Claude Code Remote Routine(트리거)이 매일 새 세션을 만들어 실행.
 
 ## 스크립트
