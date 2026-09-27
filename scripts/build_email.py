@@ -181,8 +181,11 @@ def main():
         print(f"wrote {prefix}.subject.txt ({len(result['subject'])} chars)", file=sys.stderr)
         print(f"wrote {prefix}.html ({len(result['html'])} chars)", file=sys.stderr)
         print(f"wrote {prefix}.text.txt ({len(result['text'])} chars)", file=sys.stderr)
-
-    print(json.dumps(result, ensure_ascii=False, indent=2))
+    else:
+        # output_prefix가 없을 때만 stdout에 JSON을 찍는다. prefix가 있으면
+        # 파일이 이미 결과물이므로, 여기서 또 stdout에 전체 내용을 찍는 건
+        # 호출한 에이전트의 컨텍스트에 같은 내용을 한 번 더 밀어넣는 낭비다.
+        print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":
