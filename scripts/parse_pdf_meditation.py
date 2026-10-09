@@ -42,6 +42,19 @@ FIXED_Q1 = "말씀을 통해 하나님이 오늘 나에게 주신 교훈 또는 
 PASSAGE_RE = re.compile(r"^[가-힣]+\s*\d+[장편]$")
 VERSE_REF_RE = re.compile(r"^[가-힣]+\s*\d+[장편]\s*[\d\-]+절$")
 BULLET_RE = re.compile(r"^[➊➋➌➍➎➏➐➑➒➓]")
+LABEL_LINE_RE = re.compile(r"^\[[^\]\n]*\]$")
+
+
+def dewrap(t: str) -> str:
+    """PDF는 좁은 컬럼 폭에 맞춰 줄을 강제로 자르기 때문에(단어 중간에서도
+    끊김), 박스 안의 줄바꿈은 의미 있는 줄바꿈이 아니라 인쇄용 개행일
+    뿐이다. 공백으로 풀어서 이메일에서 화면 폭에 맞게 자연스럽게 다시
+    흐르도록 한다. 다만 첫 줄이 "[ 개역개정 ]"처럼 대괄호 라벨이면, 그
+    줄바꿈만은 라벨과 본문을 시각적으로 분리하기 위해 그대로 둔다."""
+    lines = [ln.strip() for ln in t.split("\n")]
+    if len(lines) > 1 and LABEL_LINE_RE.match(lines[0]):
+        return lines[0] + "\n" + " ".join(lines[1:])
+    return " ".join(lines)
 
 
 def today_kst() -> str:
@@ -161,12 +174,15 @@ def parse_entry(boxes: list) -> dict:
     remaining_verse = []
     for bbox, t in verse_lines:
         if not meditation_text and not t.startswith("[") and len(t) > 60:
-            meditation_text = t
+            meditation_text = dewrap(t)
         else:
             remaining_verse.append((bbox, t))
     remaining_verse.sort(key=lambda b: -b[0][3])  # 다시 위->아래 순서로
 
-    verse_text = "\n".join(t for _, t in remaining_verse).strip()
+    # 박스 "사이"의 줄바꿈(예: "[ 개역개정 ]" 박스와 "[ 새번역 ]" 박스 사이)은
+    # 그대로 두되, 박스 "내부"의 줄바꿈(컬럼 폭 때문에 생긴 것)은 dewrap()으로
+    # 풀어준다(단, 라벨 줄 자체의 줄바꿈은 dewrap()이 유지해 준다).
+    verse_text = "\n".join(dewrap(t) for _, t in remaining_verse).strip()
 
     # 오른쪽 컬럼: 불릿(➊,➋ 등)은 질문, 나머지는 기도.
     # 각 2개월 주기의 첫째 날은 안내 캡션("묵상노트", "심정이 통하는 기도" 등)이
@@ -203,7 +219,10 @@ def parse_entry(boxes: list) -> dict:
             m = re.match(r"^([➊➋➌➍➎➏➐➑➒➓])\s*(.*)$", t, re.DOTALL)
             bullet_items[m.group(1)] = m.group(2).replace("\n", " ").strip()
         else:
-            prayer_parts.append(t)
+            # 박스 내부의 줄바꿈(컬럼 폭 때문에 생긴 것)을 dewrap()으로 풀어준다.
+            # 박스와 박스 사이의 구분(기도문 vs 사역 이름 등)은 아래에서
+            # "\n\n"으로 유지되므로 여기서는 손대지 않는다.
+            prayer_parts.append(dewrap(t))
 
     BULLET_ORDER = "➊➋➌➍➎➏➐➑➒➓"
     questions_list = []
