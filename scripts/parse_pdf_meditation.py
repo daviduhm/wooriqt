@@ -48,13 +48,17 @@ LABEL_LINE_RE = re.compile(r"^\[[^\]\n]*\]$")
 def dewrap(t: str) -> str:
     """PDF는 좁은 컬럼 폭에 맞춰 줄을 강제로 자르기 때문에(단어 중간에서도
     끊김), 박스 안의 줄바꿈은 의미 있는 줄바꿈이 아니라 인쇄용 개행일
-    뿐이다. 공백으로 풀어서 이메일에서 화면 폭에 맞게 자연스럽게 다시
-    흐르도록 한다. 다만 첫 줄이 "[ 개역개정 ]"처럼 대괄호 라벨이면, 그
+    뿐이다. 이때 줄 끝에 실제로 공백 문자가 남아 있는지 여부가 "이 줄바꿈
+    자리에 원래 띄어쓰기가 있었는지"를 그대로 알려준다 — 단어 중간을
+    자른 경우엔 공백이 없고, 단어/문장 경계에서 자연스럽게 넘어간
+    경우엔 공백이 남아 있다. 그래서 줄 끝 공백을 임의로 지우지 않고
+    그대로 둔 채 줄바꿈만 제거해 이어붙인다(공백을 새로 끼워 넣지
+    않는다). 다만 첫 줄이 "[ 개역개정 ]"처럼 대괄호 라벨이면, 그
     줄바꿈만은 라벨과 본문을 시각적으로 분리하기 위해 그대로 둔다."""
-    lines = [ln.strip() for ln in t.split("\n")]
-    if len(lines) > 1 and LABEL_LINE_RE.match(lines[0]):
-        return lines[0] + "\n" + " ".join(lines[1:])
-    return " ".join(lines)
+    lines = t.split("\n")
+    if len(lines) > 1 and LABEL_LINE_RE.match(lines[0].strip()):
+        return lines[0].strip() + "\n" + "".join(lines[1:]).strip()
+    return "".join(lines).strip()
 
 
 def today_kst() -> str:
