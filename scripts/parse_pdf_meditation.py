@@ -43,22 +43,37 @@ PASSAGE_RE = re.compile(r"^[가-힣]+\s*\d+[장편]$")
 VERSE_REF_RE = re.compile(r"^[가-힣]+\s*\d+[장편]\s*[\d\-]+절$")
 BULLET_RE = re.compile(r"^[➊➋➌➍➎➏➐➑➒➓]")
 LABEL_LINE_RE = re.compile(r"^\[[^\]\n]*\]$")
+VERSE_NUM_RE = re.compile(r"^\d{1,3}\s")
 
 
 def dewrap(t: str) -> str:
     """PDF는 좁은 컬럼 폭에 맞춰 줄을 강제로 자르기 때문에(단어 중간에서도
-    끊김), 박스 안의 줄바꿈은 의미 있는 줄바꿈이 아니라 인쇄용 개행일
-    뿐이다. 이때 줄 끝에 실제로 공백 문자가 남아 있는지 여부가 "이 줄바꿈
-    자리에 원래 띄어쓰기가 있었는지"를 그대로 알려준다 — 단어 중간을
-    자른 경우엔 공백이 없고, 단어/문장 경계에서 자연스럽게 넘어간
-    경우엔 공백이 남아 있다. 그래서 줄 끝 공백을 임의로 지우지 않고
-    그대로 둔 채 줄바꿈만 제거해 이어붙인다(공백을 새로 끼워 넣지
-    않는다). 다만 첫 줄이 "[ 개역개정 ]"처럼 대괄호 라벨이면, 그
-    줄바꿈만은 라벨과 본문을 시각적으로 분리하기 위해 그대로 둔다."""
-    lines = t.split("\n")
-    if len(lines) > 1 and LABEL_LINE_RE.match(lines[0].strip()):
-        return lines[0].strip() + "\n" + "".join(lines[1:]).strip()
-    return "".join(lines).strip()
+    끊김), 줄바꿈은 의미 있는 줄바꿈이 아니라 인쇄용 개행일 뿐이다. 심지어
+    pdfminer가 이 강제 개행 지점을 아예 별도의 텍스트 박스로 쪼개버리는
+    경우도 있어서(예: "...미"로 끝나는 박스와 "혹에..."로 시작하는 별도
+    박스), 박스 경계도 의미 있는 경계라고 믿을 수 없다. 그래서 이
+    함수는 여러 박스를 미리 "\n"으로 합친 문자열을 받아, 줄 끝에 실제로
+    남아 있는 공백 문자로 "원래 띄어쓰기가 있었는지"를 판단한다 — 단어
+    중간을 자른 경우엔 공백이 없고, 단어/문장 경계에서 자연스럽게 넘어간
+    경우엔 공백이 남아 있다. 그 공백을 그대로 둔 채 줄바꿈만 제거해
+    이어붙인다(공백을 새로 끼워 넣지 않는다). 다만 "[ 개역개정 ]"처럼
+    대괄호 라벨인 줄 앞뒤로는 실제 줄바꿈을 넣어 라벨을 본문과 시각적으로
+    분리한다. 또한 "15  여인이..."처럼 절 번호로 시작하는 줄은, 바로 앞
+    절이 끝나는 지점에서 공백이 아예 박스 분리(줄바꿈)로 흡수돼 버리는
+    경우가 있어(절과 절 사이는 새 박스로 나뉘는 경우가 많다), 앞에 공백이
+    없으면 하나 보충해 절 번호가 앞 문장에 그대로 들러붙지 않게 한다."""
+    out = []
+    for ln in t.split("\n"):
+        if LABEL_LINE_RE.match(ln.strip()):
+            if out:
+                out.append("\n")
+            out.append(ln.strip())
+            out.append("\n")
+        else:
+            if out and VERSE_NUM_RE.match(ln) and out[-1] and not out[-1][-1].isspace():
+                out.append(" ")
+            out.append(ln)
+    return "".join(out).strip()
 
 
 def today_kst() -> str:
@@ -78,8 +93,14 @@ def get_boxes(page) -> list:
     boxes = []
     for el in page:
         if isinstance(el, LTTextContainer):
-            t = el.get_text().strip()
-            if t:
+            # 앞쪽 공백/개행은 전부 지우되, 뒤쪽은 개행만 지우고 공백은
+            # 남긴다 — dewrap()이 "박스 끝에 공백이 있었는지"로 그 자리에
+            # 원래 띄어쓰기가 있었는지를 판단하는데, 여기서 .strip()으로
+            # 지워버리면 그 정보가 사라진다(특히 pdfminer가 한 문단을
+            # 단어 중간에서 별도 박스로 쪼개는 경우에 문제가 된다).
+            t = el.get_text().lstrip()
+            t = t.rstrip("\n")
+            if t.strip():
                 boxes.append((el.bbox, t))
     # 위에서 아래로(내림차순 y), 같은 줄이면 왼쪽에서 오른쪽으로
     boxes.sort(key=lambda b: (-round(b[0][3] / 5), b[0][0]))
@@ -128,11 +149,11 @@ def parse_entry(boxes: list) -> dict:
     remaining_left = []
     for bbox, t in left:
         if re.match(r"^\d{1,2}/\d{1,2}", t):
-            date_display = t.replace("\n", " ")
-        elif PASSAGE_RE.match(t):
-            passage = t
-        elif VERSE_REF_RE.match(t):
-            verse_ref = t
+            date_display = t.replace("\n", " ").strip()
+        elif PASSAGE_RE.match(t.strip()):
+            passage = t.strip()
+        elif VERSE_REF_RE.match(t.strip()):
+            verse_ref = t.strip()
         elif "오늘의 본문" in t or "오늘의 한 구절" in t:
             # 일부 페이지는 이 라벨("오늘의 본문 l", "오늘의 한 구절")이
             # 바로 뒤 값(passage/verse_ref)과 별개 박스로 분리되어 나온다.
@@ -183,10 +204,12 @@ def parse_entry(boxes: list) -> dict:
             remaining_verse.append((bbox, t))
     remaining_verse.sort(key=lambda b: -b[0][3])  # 다시 위->아래 순서로
 
-    # 박스 "사이"의 줄바꿈(예: "[ 개역개정 ]" 박스와 "[ 새번역 ]" 박스 사이)은
-    # 그대로 두되, 박스 "내부"의 줄바꿈(컬럼 폭 때문에 생긴 것)은 dewrap()으로
-    # 풀어준다(단, 라벨 줄 자체의 줄바꿈은 dewrap()이 유지해 준다).
-    verse_text = "\n".join(dewrap(t) for _, t in remaining_verse).strip()
+    # pdfminer가 컬럼 폭 때문에 강제로 꺾인 줄을 아예 별도 박스로 쪼개버리는
+    # 경우가 있어(단어 중간에서도) 박스 경계를 의미 있는 경계로 믿을 수 없다.
+    # 그래서 모든 박스를 일단 "\n"으로 합친 뒤, dewrap() 하나로 한 번에
+    # 처리한다 — 라벨 줄만 실제 줄바꿈으로 분리되고, 나머지는 원래 있던
+    # 공백만 살려 자연스럽게 이어붙는다.
+    verse_text = dewrap("\n".join(t for _, t in remaining_verse))
 
     # 오른쪽 컬럼: 불릿(➊,➋ 등)은 질문, 나머지는 기도.
     # 각 2개월 주기의 첫째 날은 안내 캡션("묵상노트", "심정이 통하는 기도" 등)이
