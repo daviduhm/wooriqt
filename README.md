@@ -49,11 +49,16 @@
 
 0. `curl`로 `https://raw.githubusercontent.com/daviduhm/wooriqt/claude/bundang-woori-meditation-automation-obizjz/`
    아래의 `scripts/parse_pdf_meditation.py`, `scripts/build_email.py`,
-   `scripts/pdf/<현재 주기 PDF>`를 받아 `/tmp`에 저장한다(인증 불필요,
+   그리고 **PDF 2권**(현재 기간용 `meditation_current.pdf` + 직전 기간용
+   `meditation_prev.pdf`)을 받아 `/tmp`에 저장한다(인증 불필요,
    git clone/add_repo/woorichurch.org 접속 전혀 불필요).
 1. `TZ=Asia/Seoul date +%Y-%m-%d`로 오늘 날짜(KST) 확인.
-2. `python3 parse_pdf_meditation.py <pdf> <오늘 날짜>`로 오늘의 공식 묵상
-   콘텐츠를 PDF에서 오프라인으로 파싱한다.
+2. `python3 parse_pdf_meditation.py <current.pdf> <오늘 날짜>`로 오늘의 공식
+   묵상 콘텐츠를 PDF에서 오프라인으로 파싱한다. `date_not_found_in_pdf`
+   에러가 나면(기간 경계 근처라 아직 직전 PDF에만 오늘 날짜가 있는 경우)
+   `<prev.pdf>`로 한 번 더 시도한다. 이렇게 PDF 2권을 매번 같이 받아서
+   순서대로 시도하면, 격월 PDF 교체 시점에 Routine 프롬프트를 정확한
+   타이밍에 맞춰 수동으로 전환할 필요 없이 자동으로 경계를 넘어간다.
 3. 가져온 공식 콘텐츠를 바탕으로 AI가 말씀의 배경(🏛️), 더 깊은 묵상(🌿),
    보충 기도(🙏), 추가 적용 질문(💭)을 작성해 JSON에 병합한다.
 4. `python3 build_email.py ... <prefix>`로 최종 이메일(subject/html/text) 파일을 만든다.
@@ -63,16 +68,23 @@
 
 ## PDF 갱신 (격월, 수동)
 
-- `scripts/pdf/` 아래 PDF는 홀수 달 말(9월/11월/1월 ... 말)에 교회가 다음
-  2개월치를 새로 발행하면 수동으로 교체해야 한다. 대상 게시판:
+- `scripts/pdf/` 아래에는 PDF를 **항상 최근 2권**(현재 기간 + 직전 기간)
+  보관한다. 홀수 달 말(9월/11월/1월 ... 말)에 교회가 다음 2개월치를 새로
+  발행하면 아래 순서로 갱신한다. 대상 게시판:
   https://www.woorichurch.org/modu/s_board/list.asp?board_seq=47
 - 다운로드 시 직접 다운로드 URL을 바로 요청하면 작은 JS 리다이렉트 스텁만
   내려오므로, 먼저 게시글 `read.asp` 페이지를 같은 쿠키로 방문한 뒤 그
   URL을 `Referer`로 넘겨 `download.asp`를 요청해야 실제 PDF를 받을 수 있다.
 - 새 PDF를 받으면 `scripts/parse_pdf_meditation.py`로 그 2개월 범위의 날짜
-  몇 개(평일/주일/월경계 포함)를 테스트해 정상 파싱되는지 확인한 뒤 커밋하고,
-  Routine 프롬프트가 참조하는 파일명(현재 `scripts/pdf/meditation_2026_09-10.pdf`)도
-  함께 갱신한다.
+  몇 개(평일/주일/월경계 포함)를 테스트해 정상 파싱되는지 확인한 뒤
+  `scripts/pdf/meditation_<연도>_<MM-MM>.pdf` 이름으로 커밋한다. **직전
+  PDF 파일은 바로 지우지 않고 한 주기 더 남겨둔다**(2단계 폴백용 — 위
+  "매일 실행 흐름" 2) 참고). Routine 프롬프트의 `meditation_current.pdf`/
+  `meditation_prev.pdf` curl URL도 새 파일명 2개로 갱신한다(새로 받은 걸
+  current, 그 직전 걸 prev로).
+- 이 폴백 설계 덕분에, 새 PDF를 기간이 시작되기 며칠 전에 미리 받아서
+  커밋해 둬도 안전하다(시작 전 날짜는 current에서 못 찾고 prev로 자동
+  폴백되므로) — 정확히 월 경계에 맞춰 갱신 타이밍을 잡을 필요가 없다.
 
 ## 변경 이력 메모 (문제 해결 과정)
 
