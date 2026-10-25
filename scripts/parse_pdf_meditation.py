@@ -249,7 +249,16 @@ def parse_entry(boxes: list) -> dict:
             # 박스 내부의 줄바꿈(컬럼 폭 때문에 생긴 것)을 dewrap()으로 풀어준다.
             # 박스와 박스 사이의 구분(기도문 vs 사역 이름 등)은 아래에서
             # "\n\n"으로 유지되므로 여기서는 손대지 않는다.
-            prayer_parts.append(dewrap(t))
+            dewrapped = dewrap(t)
+            # 일부 PDF 판에서는 "함께 기도   유아세례식"처럼 안내 캡션과
+            # 사역/행사 이름이 같은 박스 안에 한 줄로 붙어 나온다. 캡션
+            # 접두어만 떼어내고 나머지(실제 사역/행사 이름)는 살린다.
+            for cap in GUIDE_CAPTIONS:
+                if dewrapped.startswith(cap) and dewrapped[len(cap):len(cap) + 1].isspace():
+                    dewrapped = dewrapped[len(cap):].strip()
+                    break
+            if dewrapped:
+                prayer_parts.append(dewrapped)
 
     BULLET_ORDER = "➊➋➌➍➎➏➐➑➒➓"
     questions_list = []
